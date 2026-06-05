@@ -1,50 +1,26 @@
-from memory_lab import (
-    EventKind,
-    EvidenceLedgerMemory,
-    EvidenceTableRenderer,
-    MemoryEvent,
-    MemoryQuery,
-)
+from memory_lab import Memory
 
 
 def main() -> None:
-    model = EvidenceLedgerMemory()
-    state = model.initial_state()
-    state = model.ingest(
-        state,
-        (
-            MemoryEvent(
-                id="evt_source",
-                kind=EventKind.TOOL_RESULT,
-                payload={
-                    "evidence": [
-                        {
-                            "claim_slot": "benchmark",
-                            "content": "The source reports a 12% improvement.",
-                            "status": "supported",
-                            "url": "https://example.test/paper",
-                            "confidence": 0.9,
-                        },
-                    ],
-                },
-            ),
-            MemoryEvent(
-                id="evt_gap",
-                kind=EventKind.EVIDENCE_REVIEW,
-                payload={
-                    "missing_evidence": [
-                        {
-                            "claim_slot": "safety",
-                            "content": "Need an independent safety evaluation.",
-                        },
-                    ],
-                },
-            ),
-        ),
+    memory = Memory("evidence_ledger")
+    memory.update(
+        {
+            "kind": "evidence",
+            "slot": "benchmark",
+            "content": "The source reports a 12% improvement.",
+            "source": "https://example.test/paper",
+            "status": "supported",
+            "confidence": 0.9,
+        },
     )
-    packet = model.select_context(state, MemoryQuery(objective="audit evidence"))
-    rendered = EvidenceTableRenderer().render(packet)
-    print(rendered.text)
+    memory.update(
+        {
+            "kind": "missing",
+            "slot": "safety",
+            "content": "Need an independent safety evaluation.",
+        },
+    )
+    print(memory.read(objective="audit evidence").text)
 
 
 if __name__ == "__main__":

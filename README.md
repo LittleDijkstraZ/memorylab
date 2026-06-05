@@ -1,16 +1,15 @@
 # Memory Lab
 
-Memory Lab is a small Python library for experimenting with agent memory
-strategies. It treats memory as a swappable model over events:
+Memory Lab is a small Python library for agent memory. It gives you two
+everyday operations:
 
-```text
-MemoryEvent -> MemoryModel.ingest(...) -> MemoryState
-MemoryState + MemoryQuery -> ContextPacket
-ContextPacket + ContextRenderer -> model-ready text
+```python
+memory.update(...)
+memory.read(...)
 ```
 
-The goal is to make memory strategies comparable without forcing a vector
-database, graph database, hosted memory service, or one specific agent runtime.
+Under the hood, you can swap different memory strategies such as full history,
+rolling summaries, task hierarchies, and evidence ledgers.
 
 ## Install
 
@@ -20,113 +19,96 @@ cd memorylab
 python -m pip install -e .
 ```
 
-For tests:
+For local development:
 
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-Memory Lab currently has no runtime dependencies outside the Python standard
-library. Python 3.11 or newer is required.
+Memory Lab has no runtime dependencies outside the Python standard library.
+Python 3.11 or newer is required.
 
-## Quick Example
-
-```python
-from memory_lab import (
-    EventKind,
-    FullHistoryMemory,
-    MemoryEvent,
-    MemoryQuery,
-    ResearchBriefRenderer,
-)
-
-model = FullHistoryMemory()
-state = model.initial_state()
-state = model.ingest(
-    state,
-    (
-        MemoryEvent(
-            id="evt_run",
-            kind=EventKind.RUN_STARTED,
-            content="Verify whether the claim is supported.",
-        ),
-        MemoryEvent(
-            id="evt_reasoning",
-            kind=EventKind.REASONING_NOTE,
-            content="I should start with primary sources.",
-        ),
-    ),
-)
-
-packet = model.select_context(state, MemoryQuery(objective="verify claim"))
-rendered = ResearchBriefRenderer().render(packet)
-print(rendered.text)
-```
-
-## What Is Included
-
-- `MemoryEvent`, `MemoryItem`, `MemoryState`, `MemoryQuery`, and
-  `ContextPacket` schemas.
-- Trust and provenance labels for source observations, model-derived summaries,
-  worker summaries, final synthesis, and control state.
-- Memory models:
-  - `FullHistoryMemory`
-  - `EvidenceLedgerMemory`
-  - `RollingSummaryMemory`
-  - `HierarchicalSummaryMemory`
-  - `LLMManagedMemory` with an injected operation manager
-- Renderers:
-  - `ResearchBriefRenderer`
-  - `CompactPromptRenderer`
-  - `EvidenceTableRenderer`
-- Packet comparison helpers for coverage and token-budget checks.
-
-## Evidence Ledger Example
+## Quick Start
 
 ```python
-from memory_lab import (
-    EventKind,
-    EvidenceLedgerMemory,
-    EvidenceTableRenderer,
-    MemoryEvent,
-    MemoryQuery,
-)
+from memory_lab import Memory
 
-model = EvidenceLedgerMemory()
-state = model.initial_state()
-state = model.ingest(
-    state,
-    (
-        MemoryEvent(
-            id="evt_source",
-            kind=EventKind.TOOL_RESULT,
-            payload={
-                "evidence": [
-                    {
-                        "claim_slot": "benchmark",
-                        "content": "The source reports a 12% improvement.",
-                        "status": "supported",
-                        "url": "https://example.test/paper",
-                    },
-                ],
-            },
-        ),
-    ),
-)
+memory = Memory("full_history")
 
-packet = model.select_context(state, MemoryQuery(objective="audit evidence"))
-print(EvidenceTableRenderer().render(packet).text)
+memory.update("Verify whether the claim is supported.", kind="run_started")
+memory.update("I should start with primary sources.", kind="note")
+
+context = memory.read(objective="verify claim")
+print(context.text)
 ```
 
-More runnable examples are in `examples/`.
+That is the main idea: write with `update`, read with `read`.
 
-## Design Notes
+## Evidence Memory
 
-Memory Lab keeps durable memory separate from control context. Tool-use
-protocols, budget hints, and current-turn instructions can be rendered into a
-context packet, but they should not become source evidence.
+For research workflows, use the evidence ledger:
 
-The evidence ledger is rule-first. Final reports and model summaries are useful
-context hints, but they are not treated as primary evidence unless they cite
-source-bearing events.
+```python
+from memory_lab import Memory
+
+memory = Memory("evidence_ledger")
+
+memory.update(
+    {
+        "kind": "evidence",
+        "slot": "benchmark",
+        "content": "The source reports a 12% improvement.",
+        "source": "https://example.test/paper",
+        "status": "supported",
+    }
+)
+
+memory.update(
+    {
+        "kind": "missing",
+        "slot": "safety",
+        "content": "Need an independent safety evaluation.",
+    }
+)
+
+print(memory.read(objective="audit evidence").text)
+```
+
+## Available Memory Models
+
+```python
+Memory("full_history")
+Memory("evidence_ledger")
+Memory("rolling_summary")
+Memory("hierarchical_summary")
+Memory("llm_managed")
+```
+
+The default renderer is chosen for the model. You can override it:
+
+```python
+memory.read(objective="audit evidence", renderer="compact_prompt")
+```
+
+## Examples
+
+Runnable examples are in `examples/`:
+
+```bash
+python examples/basic_usage.py
+python examples/evidence_ledger.py
+```
+
+## Advanced API
+
+The simple `Memory` object is a wrapper around the lower-level pieces:
+
+```text
+MemoryEvent -> MemoryModel.ingest(...) -> MemoryState
+MemoryState + MemoryQuery -> ContextPacket
+ContextPacket + ContextRenderer -> text
+```
+
+Use the lower-level schema/model APIs when you are building adapters, replay
+harnesses, or comparing memory strategies directly.

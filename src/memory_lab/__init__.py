@@ -1,4 +1,5 @@
 from memory_lab.evaluation import PacketComparison, compare_packet
+from memory_lab.memory import Memory
 from memory_lab.models import (
     BaseMemoryModel,
     EvidenceLedgerMemory,
@@ -50,6 +51,7 @@ __all__ = [
     "FullHistoryMemory",
     "HierarchicalSummaryMemory",
     "LLMManagedMemory",
+    "Memory",
     "MemoryEvent",
     "MemoryItem",
     "MemoryItemKind",
