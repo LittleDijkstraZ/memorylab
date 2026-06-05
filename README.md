@@ -8,8 +8,8 @@ memory.update(...)
 memory.read(...)
 ```
 
-Under the hood, you can swap different memory strategies such as full history,
-rolling summaries, task hierarchies, and evidence ledgers.
+The default API is intentionally plain: write text or dictionaries in, read
+context out. You can swap the memory strategy later.
 
 ## Install
 
@@ -34,45 +34,40 @@ Python 3.11 or newer is required.
 ```python
 from memory_lab import Memory
 
-memory = Memory("full_history")
+memory = Memory()
 
-memory.update("Verify whether the claim is supported.", kind="run_started")
-memory.update("I should start with primary sources.", kind="note")
+memory.update("The user prefers concise research notes.")
+memory.update("The current task is a literature review.")
 
-context = memory.read(objective="verify claim")
+context = memory.read()
 print(context.text)
 ```
 
-That is the main idea: write with `update`, read with `read`.
+You can also pass dictionaries when your app has extra metadata:
 
-## Evidence Memory
+```python
+memory.update({
+    "content": "The user is comparing memory strategies.",
+    "metadata": {"project": "memorylab"},
+})
+```
 
-For research workflows, use the evidence ledger:
+That is the main idea: `update` writes memory, `read` returns usable context.
+
+## Try Another Strategy
+
+Different memory strategies can organize the same updates differently:
 
 ```python
 from memory_lab import Memory
 
-memory = Memory("evidence_ledger")
+memory = Memory("rolling_summary")
 
-memory.update(
-    {
-        "kind": "evidence",
-        "slot": "benchmark",
-        "content": "The source reports a 12% improvement.",
-        "source": "https://example.test/paper",
-        "status": "supported",
-    }
-)
+memory.update("The user prefers concise research notes.")
+memory.update("The current task is a literature review.")
+memory.update("The next step is to compare memory strategies.")
 
-memory.update(
-    {
-        "kind": "missing",
-        "slot": "safety",
-        "content": "Need an independent safety evaluation.",
-    }
-)
-
-print(memory.read(objective="audit evidence").text)
+print(memory.read().text)
 ```
 
 ## Available Memory Models
@@ -88,7 +83,7 @@ Memory("llm_managed")
 The default renderer is chosen for the model. You can override it:
 
 ```python
-memory.read(objective="audit evidence", renderer="compact_prompt")
+memory.read(renderer="compact_prompt")
 ```
 
 ## Examples
@@ -97,12 +92,12 @@ Runnable examples are in `examples/`:
 
 ```bash
 python examples/basic_usage.py
-python examples/evidence_ledger.py
+python examples/strategy_usage.py
 ```
 
 ## Advanced API
 
-The simple `Memory` object is a wrapper around the lower-level pieces:
+The simple `Memory` object is a wrapper around lower-level pieces:
 
 ```text
 MemoryEvent -> MemoryModel.ingest(...) -> MemoryState
@@ -110,5 +105,5 @@ MemoryState + MemoryQuery -> ContextPacket
 ContextPacket + ContextRenderer -> text
 ```
 
-Use the lower-level schema/model APIs when you are building adapters, replay
-harnesses, or comparing memory strategies directly.
+Adapters can pass explicit event kinds, provenance, and other structured
+fields. Most users can start with `Memory.update()` and `Memory.read()`.

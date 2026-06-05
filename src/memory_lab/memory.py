@@ -20,7 +20,6 @@ from memory_lab.renderers import (
 )
 from memory_lab.schema import (
     EventKind,
-    EvidenceStatus,
     MemoryEvent,
     MemoryPhase,
     MemoryQuery,
@@ -63,12 +62,12 @@ EVENT_KIND_ALIASES = {
     "task_plan": EventKind.TASK_PLAN_CREATED,
     "task_plan_created": EventKind.TASK_PLAN_CREATED,
     "note": EventKind.REASONING_NOTE,
+    "record": EventKind.REASONING_NOTE,
     "reasoning": EventKind.REASONING_NOTE,
     "reasoning_note": EventKind.REASONING_NOTE,
     "tool_call": EventKind.TOOL_CALL,
     "tool_result": EventKind.TOOL_RESULT,
     "observation": EventKind.TOOL_RESULT,
-    "source": EventKind.TOOL_RESULT,
     "evidence": EventKind.TOOL_RESULT,
     "missing": EventKind.EVIDENCE_REVIEW,
     "missing_evidence": EventKind.EVIDENCE_REVIEW,
@@ -186,7 +185,7 @@ class Memory:
             if isinstance(entry, MemoryEvent):
                 events.append(entry)
             elif isinstance(entry, str):
-                entry_kind = kind or "reasoning_note"
+                entry_kind = kind or self._default_kind()
                 events.append(self._event_from_mapping({"kind": entry_kind, "content": entry}))
             elif isinstance(entry, Mapping):
                 merged = {**entry}
@@ -198,14 +197,14 @@ class Memory:
         return tuple(events)
 
     def _event_from_mapping(self, data: Mapping[str, Any]) -> MemoryEvent:
-        raw_kind = data.get("kind", "reasoning_note")
+        raw_kind = data.get("kind", self._default_kind())
         kind_name = str(raw_kind.value if isinstance(raw_kind, EventKind) else raw_kind)
         if kind_name in {"evidence", "missing", "missing_evidence"}:
             return self._simple_evidence_event(kind_name, data)
 
         event_kind = self._event_kind(kind_name)
         content = str(data.get("content") or data.get("text") or "")
-        payload = dict(data.get("payload") or {})
+        payload = self._payload(data)
         source_refs = self._refs(data, "source", "source_ref", "source_refs", "url")
         artifact_refs = self._refs(data, "artifact", "artifact_ref", "artifact_refs")
         provenance = Provenance(source_refs=source_refs, artifact_refs=artifact_refs)
@@ -299,6 +298,47 @@ class Memory:
         except ValueError as exc:
             known = ", ".join(sorted(EVENT_KIND_ALIASES))
             raise ValueError(f"Unknown memory update kind {raw_kind!r}. Known kinds: {known}") from exc
+
+    def _default_kind(self) -> str:
+        if self.model.name == "evidence_ledger":
+            return "observation"
+        return "record"
+
+    def _payload(self, data: Mapping[str, Any]) -> dict[str, Any]:
+        payload = dict(data.get("payload") or {})
+        metadata = data.get("metadata")
+        if isinstance(metadata, Mapping):
+            existing_metadata = dict(payload.get("metadata") or {})
+            payload["metadata"] = {**existing_metadata, **metadata}
+
+        reserved_keys = {
+            "id",
+            "kind",
+            "content",
+            "text",
+            "timestamp",
+            "payload",
+            "metadata",
+            "source",
+            "source_ref",
+            "source_refs",
+            "url",
+            "artifact",
+            "artifact_ref",
+            "artifact_refs",
+            "trust",
+            "task_id",
+            "worker_id",
+            "tags",
+        }
+        extra = {
+            key: value
+            for key, value in data.items()
+            if key not in reserved_keys
+        }
+        if extra:
+            payload["fields"] = {**dict(payload.get("fields") or {}), **extra}
+        return payload
 
     def _trust(self, data: Mapping[str, Any]) -> TrustLevel | None:
         raw_trust = data.get("trust")
