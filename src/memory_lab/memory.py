@@ -3,21 +3,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from memory_lab.models import (
-    EvidenceLedgerMemory,
-    FullHistoryMemory,
-    HierarchicalSummaryMemory,
-    LLMManagedMemory,
-    MemoryModel,
-    RollingSummaryMemory,
-)
-from memory_lab.renderers import (
-    CompactPromptRenderer,
-    ContextRenderer,
-    EvidenceTableRenderer,
-    RenderedContext,
-    ResearchBriefRenderer,
-)
+import memory_lab.models as _builtin_models  # noqa: F401
+import memory_lab.renderers as _builtin_renderers  # noqa: F401
+from memory_lab.models.base import MemoryModel
+from memory_lab.registry import create_model, create_renderer, default_renderer_for
+from memory_lab.renderers.base import ContextRenderer, RenderedContext
 from memory_lab.schema import (
     EventKind,
     MemoryEvent,
@@ -28,31 +18,6 @@ from memory_lab.schema import (
     TrustLevel,
     new_id,
 )
-
-
-MODEL_REGISTRY = {
-    "full_history": FullHistoryMemory,
-    "evidence_ledger": EvidenceLedgerMemory,
-    "rolling_summary": RollingSummaryMemory,
-    "hierarchical_summary": HierarchicalSummaryMemory,
-    "llm_managed": LLMManagedMemory,
-}
-
-
-RENDERER_REGISTRY = {
-    "research_brief": ResearchBriefRenderer,
-    "compact_prompt": CompactPromptRenderer,
-    "evidence_table": EvidenceTableRenderer,
-}
-
-
-DEFAULT_RENDERERS = {
-    "full_history": "research_brief",
-    "evidence_ledger": "evidence_table",
-    "rolling_summary": "compact_prompt",
-    "hierarchical_summary": "compact_prompt",
-    "llm_managed": "research_brief",
-}
 
 
 EVENT_KIND_ALIASES = {
@@ -267,12 +232,7 @@ class Memory:
     def _resolve_model(self, model: str | MemoryModel) -> MemoryModel:
         if not isinstance(model, str):
             return model
-        try:
-            model_cls = MODEL_REGISTRY[model]
-        except KeyError as exc:
-            known = ", ".join(sorted(MODEL_REGISTRY))
-            raise ValueError(f"Unknown memory model {model!r}. Known models: {known}") from exc
-        return model_cls()
+        return create_model(model)
 
     def _resolve_renderer(
         self,
@@ -280,15 +240,10 @@ class Memory:
         model_name: str,
     ) -> ContextRenderer:
         if renderer is None:
-            renderer = DEFAULT_RENDERERS.get(model_name, "research_brief")
+            renderer = default_renderer_for(model_name)
         if not isinstance(renderer, str):
             return renderer
-        try:
-            renderer_cls = RENDERER_REGISTRY[renderer]
-        except KeyError as exc:
-            known = ", ".join(sorted(RENDERER_REGISTRY))
-            raise ValueError(f"Unknown renderer {renderer!r}. Known renderers: {known}") from exc
-        return renderer_cls()
+        return create_renderer(renderer)
 
     def _event_kind(self, raw_kind: str) -> EventKind:
         if raw_kind in EVENT_KIND_ALIASES:

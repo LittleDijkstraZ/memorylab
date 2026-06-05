@@ -1,4 +1,17 @@
-from memory_lab import Memory, MemoryEvent, EventKind
+from memory_lab import (
+    BaseMemoryModel,
+    ContextPacket,
+    ContextSection,
+    EventKind,
+    Memory,
+    MemoryEvent,
+    MemoryQuery,
+    MemoryState,
+    SectionKind,
+    TrustLevel,
+    list_models,
+    register_model,
+)
 
 
 def test_memory_facade_updates_and_reads_full_history_text():
@@ -74,3 +87,34 @@ def test_memory_facade_keeps_advanced_memory_event_path():
     packet = memory.packet()
 
     assert packet.section("control_state") is not None
+
+
+def test_memory_facade_uses_registered_custom_model():
+    @register_model("unit_test_echo", default_renderer="compact_prompt")
+    class EchoMemory(BaseMemoryModel):
+        name = "unit_test_echo"
+
+        def ingest(self, state: MemoryState, events: tuple[MemoryEvent, ...]) -> MemoryState:
+            updated_state, _new_events = self._append_new_events(state, events)
+            return updated_state
+
+        def select_context(self, state: MemoryState, query: MemoryQuery) -> ContextPacket:
+            content = "\n".join(event.text() for event in state.events)
+            event_ids = tuple(event.id for event in state.events)
+            section = ContextSection(
+                id="echo",
+                title="Echo",
+                kind=SectionKind.MEMORY,
+                trust=TrustLevel.UNKNOWN,
+                content=content,
+                event_ids=event_ids,
+            )
+            return ContextPacket(query=query, sections=(section,))
+
+    memory = Memory("unit_test_echo")
+    memory.update("custom strategy input")
+    rendered = memory.read()
+
+    assert "unit_test_echo" in list_models()
+    assert "custom strategy input" in rendered.text
+    assert rendered.metadata["renderer"] == "compact_prompt"
