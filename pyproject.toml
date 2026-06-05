@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=53"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memorylab"
+version = "0.1.0"
+description = "Swappable memory-model primitives for agent context management."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "LittleDijkstraZ" },
+]
+keywords = [
+  "agents",
+  "memory",
+  "context-management",
+  "deep-research",
+  "llm",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+]
+
+[project.urls]
+Repository = "https://github.com/LittleDijkstraZ/memorylab"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
