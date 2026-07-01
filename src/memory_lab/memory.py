@@ -5,10 +5,13 @@ from typing import Any
 
 import memory_lab.models as _builtin_models  # noqa: F401
 import memory_lab.renderers as _builtin_renderers  # noqa: F401
+from memory_lab.engine import RecipeCapabilities, RecipeEngine
 from memory_lab.models.base import MemoryModel
+from memory_lab.recipe import MemoryDeriveResult, MemoryRecipe
 from memory_lab.registry import create_model, create_renderer, default_renderer_for
 from memory_lab.renderers.base import ContextRenderer, RenderedContext
 from memory_lab.schema import (
+    ContextPacket,
     EventKind,
     MemoryEvent,
     MemoryPhase,
@@ -98,7 +101,56 @@ class Memory:
             include_model_derived=include_model_derived,
         )
         packet = self.model.select_context(self.state, query)
-        active_renderer = self._resolve_renderer(renderer, self.model.name) if renderer else self.renderer
+        active_renderer = (
+            self._resolve_renderer(renderer, self.model.name)
+            if renderer
+            else self.renderer
+        )
+        return active_renderer.render(packet, budget_tokens=budget_tokens)
+
+    def derive(
+        self,
+        recipe: MemoryRecipe,
+        *,
+        objective: str = "",
+        phase: str | MemoryPhase = MemoryPhase.REASONING,
+        task_id: str | None = None,
+        worker_id: str | None = None,
+        budget_tokens: int | None = None,
+        include_control: bool = True,
+        include_synthesis: bool = False,
+        include_model_derived: bool = True,
+        capabilities: RecipeCapabilities | None = None,
+    ) -> MemoryDeriveResult:
+        query = MemoryQuery(
+            phase=phase,
+            objective=objective,
+            task_id=task_id,
+            worker_id=worker_id,
+            budget_tokens=budget_tokens,
+            include_control=include_control,
+            include_synthesis=include_synthesis,
+            include_model_derived=include_model_derived,
+        )
+        return RecipeEngine().derive(
+            self.state,
+            query,
+            recipe,
+            capabilities=capabilities,
+        )
+
+    def render_packet(
+        self,
+        packet: ContextPacket,
+        *,
+        renderer: str | ContextRenderer | None = None,
+        budget_tokens: int | None = None,
+    ) -> RenderedContext:
+        active_renderer = (
+            self._resolve_renderer(renderer, self.model.name)
+            if renderer
+            else self.renderer
+        )
         return active_renderer.render(packet, budget_tokens=budget_tokens)
 
     def packet(
